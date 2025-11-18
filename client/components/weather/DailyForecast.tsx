@@ -138,7 +138,15 @@ export function DailyForecast({ data }: DailyForecastProps) {
         // Extended forecast - grid layout
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {nextDays.map((day, idx) => {
-            const weather = getWeatherDescription(day.weatherCode);
+            // Use noon as reference for determining day/night
+            const noonTime = new Date(day.date);
+            noonTime.setHours(12, 0, 0, 0);
+            const isDay = isDaytime(
+              noonTime,
+              data.daily.sunrise[idx],
+              data.daily.sunset[idx],
+            );
+            const weather = getWeatherDescription(day.weatherCode, isDay);
             const dateStr = day.date.toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
