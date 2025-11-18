@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { WeatherData, getWeatherDescription } from "@/lib/weather";
 import {
   Cloud,
@@ -12,7 +11,6 @@ import {
   Sunset,
   Clock,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface CurrentWeatherProps {
   data: WeatherData;
