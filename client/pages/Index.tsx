@@ -189,17 +189,15 @@ export default function Index() {
     setLoading(true);
     setError(null);
 
-    // When user clicks "Current", always try fresh geolocation first
-    // This allows them to grant permission if they had denied it before
-    localStorage.removeItem("geolocationDenied");
-
     if (!navigator.geolocation) {
       setError("Geolocation is not supported");
       setLoading(false);
       return;
     }
 
-    // Try to get fresh location from geolocation API
+    // When user clicks "Current", always try fresh geolocation
+    // This handles both first-time permission requests and re-requesting
+    // after the user changes browser settings (e.g., enables location)
     try {
       const position = await new Promise<GeolocationPosition>(
         (resolve, reject) => {
@@ -249,7 +247,6 @@ export default function Index() {
       setWeather(weatherData);
       setCityName(cityName);
       setError(null);
-      setLoading(false);
 
       // Cache the successful location
       localStorage.setItem(
@@ -260,84 +257,21 @@ export default function Index() {
           timestamp: Date.now(),
         }),
       );
-      localStorage.removeItem("geolocationDenied");
     } catch (err) {
       console.error("Error getting location:", err);
 
-      // If user denied permission, show New Delhi as default
-      if (err instanceof GeolocationPositionError && err.code === 1) {
-        try {
-          const weatherData = await getWeatherData(28.7041, 77.1025); // New Delhi
-          setWeather(weatherData);
-          setCityName("New Delhi");
-          setError(null);
-          setLoading(false);
-          localStorage.setItem("geolocationDenied", "true");
-        } catch (weatherErr) {
-          console.error("Error fetching New Delhi weather:", weatherErr);
-          setError("Failed to load weather data");
-          setLoading(false);
-        }
-        return;
+      // If user denied permission or any other error, fall back to Delhi
+      try {
+        const weatherData = await getWeatherData(28.6139, 77.209); // Delhi coordinates
+        setWeather(weatherData);
+        setCityName("Delhi");
+        setError(null);
+      } catch (weatherErr) {
+        console.error("Error fetching Delhi weather:", weatherErr);
+        setError("Failed to load weather data");
       }
-
-      // For timeout or other errors, fall back to cached location
-      const cachedLocation = localStorage.getItem("userLocation");
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-
-      if (cachedLocation) {
-        try {
-          const { lat, lng, timestamp } = JSON.parse(cachedLocation);
-          const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-          if (Date.now() - timestamp < oneWeekMs) {
-            latitude = lat;
-            longitude = lng;
-          }
-        } catch (e) {
-          localStorage.removeItem("userLocation");
-        }
-      }
-
-      if (latitude !== null && longitude !== null) {
-        try {
-          let cityName = "Your Location";
-          try {
-            const geocodeResponse = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-              { signal: AbortSignal.timeout(5000) },
-            );
-            const geocodeData = await geocodeResponse.json();
-            const fetchedCityName =
-              geocodeData.address?.city ||
-              geocodeData.address?.town ||
-              geocodeData.address?.county;
-
-            if (fetchedCityName) {
-              cityName = fetchedCityName;
-            }
-          } catch (err) {
-            console.error("Error fetching city name:", err);
-          }
-
-          const weatherData = await getWeatherData(latitude, longitude);
-          setWeather(weatherData);
-          setCityName(cityName);
-          setError(null);
-          setLoading(false);
-        } catch (err) {
-          console.error("Error fetching weather data:", err);
-          setError("Failed to load weather data");
-          setLoading(false);
-        }
-      } else {
-        let errorMsg = "Could not get your location";
-        if (err instanceof Error && err.message === "Location request timed out") {
-          errorMsg = "Location request timed out. Please try again.";
-        }
-        setError(errorMsg);
-        setLoading(false);
-      }
+    } finally {
+      setLoading(false);
     }
   };
 
