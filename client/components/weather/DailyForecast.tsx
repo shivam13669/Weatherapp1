@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { WeatherData, getWeatherDescription } from "@/lib/weather";
+import { WeatherData, getWeatherDescription, isDaytime } from "@/lib/weather";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 
 interface DailyForecastProps {
