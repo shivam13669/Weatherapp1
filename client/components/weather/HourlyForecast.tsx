@@ -27,6 +27,25 @@ export function HourlyForecast({ data }: HourlyForecastProps) {
       windSpeed: data.hourly.windSpeed10m[currentHourIndex + idx],
     }));
 
+  const getHourlyDayNightStatus = (hourTime: Date): boolean => {
+    // Find the day this hour belongs to
+    const hourDateStr = hourTime.toISOString().split("T")[0];
+    const dayIndex = data.daily.time.findIndex((date) =>
+      date.startsWith(hourDateStr),
+    );
+
+    if (dayIndex >= 0) {
+      const sunrise = data.daily.sunrise[dayIndex];
+      const sunset = data.daily.sunset[dayIndex];
+      if (sunrise && sunset) {
+        return isDaytime(hourTime, sunrise, sunset);
+      }
+    }
+
+    // Fallback: use current time's isDay status if we can't determine
+    return data.current.isDay;
+  };
+
   return (
     <div className="w-full">
       <h2 className="text-xl font-bold text-foreground mb-4">
@@ -36,7 +55,8 @@ export function HourlyForecast({ data }: HourlyForecastProps) {
         <div className="overflow-x-auto">
           <div className="flex gap-4 p-4 min-w-min">
             {nextHours.map((hour, idx) => {
-              const weather = getWeatherDescription(hour.weatherCode);
+              const isDay = getHourlyDayNightStatus(hour.time);
+              const weather = getWeatherDescription(hour.weatherCode, isDay);
               const timeStr = hour.time.toLocaleTimeString("en-US", {
                 hour: "2-digit",
                 minute: "2-digit",
