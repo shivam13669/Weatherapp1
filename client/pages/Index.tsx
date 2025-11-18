@@ -10,157 +10,188 @@ import { DailyForecastSkeleton } from "@/components/weather/DailyForecastSkeleto
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
 
+interface LocationCache {
+  lat: number;
+  lng: number;
+  timestamp: number;
+  cityName: string;
+  isRealLocation: boolean;
+}
+
 export default function Index() {
   const [weather, setWeather] = useState(null);
   const [location, setLocation] = useState<LocationData | null>(null);
   const [cityName, setCityName] = useState("Loading...");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
 
-  // Try to get user's location on first load
+  const NEW_DELHI_LAT = 28.6139;
+  const NEW_DELHI_LNG = 77.209;
+
+  // Fetch city name from coordinates using reverse geocoding
+  const fetchCityName = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const geocodeResponse = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      const geocodeData = await geocodeResponse.json();
+      return (
+        geocodeData.address?.city ||
+        geocodeData.address?.town ||
+        geocodeData.address?.county ||
+        "Your Location"
+      );
+    } catch (err) {
+      console.error("Error fetching city name:", err);
+      return "Your Location";
+    }
+  };
+
+  // Load weather and city name for given coordinates
+  const loadWeatherForLocation = async (
+    lat: number,
+    lng: number,
+    defaultCityName: string,
+    isRealLocation: boolean,
+  ) => {
+    try {
+      let cityNameToUse = defaultCityName;
+
+      // Fetch city name if we have real coordinates
+      if (isRealLocation) {
+        cityNameToUse = await fetchCityName(lat, lng);
+      }
+
+      // Fetch weather data
+      const weatherData = await getWeatherData(lat, lng);
+      setWeather(weatherData);
+      setCityName(cityNameToUse);
+      setError(null);
+      setLocationDenied(false);
+
+      // Cache the location
+      const cache: LocationCache = {
+        lat,
+        lng,
+        timestamp: Date.now(),
+        cityName: cityNameToUse,
+        isRealLocation,
+      };
+      localStorage.setItem("weatherLocationCache", JSON.stringify(cache));
+    } catch (err) {
+      console.error("Error loading weather:", err);
+      setError("Failed to load weather data");
+    }
+  };
+
+  // Try to get user's current location using geolocation API
+  const getCurrentLocation = async (): Promise<{
+    lat: number;
+    lng: number;
+  } | null> => {
+    if (!navigator.geolocation) {
+      console.warn("Geolocation not supported");
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        resolve(null);
+      }, 15000); // 15 seconds timeout
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          clearTimeout(timeoutId);
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          console.warn("Geolocation error:", error);
+          resolve(null);
+        },
+        {
+          timeout: 15000,
+          enableHighAccuracy: false,
+          maximumAge: 0,
+        },
+      );
+    });
+  };
+
+  // Initial load: try to get location from cache or request permission
   useEffect(() => {
     let isMounted = true;
 
-    const getInitialLocation = async () => {
-      // Try to get user's location first
-      let userLat: number | null = null;
-      let userLng: number | null = null;
-
-      // Check if we have a cached location from previous successful geolocation
-      const cachedLocation = localStorage.getItem("userLocation");
-      if (cachedLocation) {
+    const initializeWeather = async () => {
+      // Check if we have cached location
+      const cached = localStorage.getItem("weatherLocationCache");
+      if (cached) {
         try {
-          const { lat, lng, timestamp } = JSON.parse(cachedLocation);
+          const cache: LocationCache = JSON.parse(cached);
           const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-          // Use cached location if it's less than a week old
-          if (Date.now() - timestamp < oneWeekMs) {
-            userLat = lat;
-            userLng = lng;
-          }
-        } catch (err) {
-          localStorage.removeItem("userLocation");
-        }
-      }
 
-      // Try to get fresh location from geolocation API
-      // Both "Allow" and "Allow while using this site" will work the same way
-      if (navigator.geolocation && userLat === null) {
-        try {
-          const position = await new Promise<GeolocationPosition>(
-            (resolve, reject) => {
-              const timeoutId = setTimeout(
-                () => reject(new Error("Geolocation timeout")),
-                30000, // 30 seconds timeout to accommodate permission dialogs
+          // Use cached location if less than a week old
+          if (Date.now() - cache.timestamp < oneWeekMs) {
+            if (isMounted) {
+              await loadWeatherForLocation(
+                cache.lat,
+                cache.lng,
+                cache.cityName,
+                cache.isRealLocation,
               );
-
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  clearTimeout(timeoutId);
-                  resolve(pos);
-                },
-                (err) => {
-                  clearTimeout(timeoutId);
-                  reject(err);
-                },
-                {
-                  timeout: 30000,
-                  enableHighAccuracy: false,
-                  maximumAge: 0, // Always get fresh location
-                },
-              );
-            },
-          );
-
-          userLat = position.coords.latitude;
-          userLng = position.coords.longitude;
-
-          // Cache successful location
-          localStorage.setItem(
-            "userLocation",
-            JSON.stringify({
-              lat: userLat,
-              lng: userLng,
-              timestamp: Date.now(),
-            }),
-          );
-        } catch (err) {
-          console.error("Error getting user location:", err);
-          // For any error (including permission denial), fall back to cached location
-          if (cachedLocation) {
-            try {
-              const { lat, lng } = JSON.parse(cachedLocation);
-              userLat = lat;
-              userLng = lng;
-            } catch (e) {
-              // Fall through - will show default Delhi
+              if (isMounted) {
+                if (!cache.isRealLocation) {
+                  setLocationDenied(true);
+                }
+                setLoading(false);
+              }
             }
+            return;
           }
+        } catch (err) {
+          console.error("Error parsing cached location:", err);
         }
       }
 
-      // Load weather data based on location we found
-      const loadWeatherForLocation = async (
-        lat: number,
-        lng: number,
-        defaultCityName: string,
-      ) => {
-        try {
-          // First, fetch the city name
-          let cityName = defaultCityName;
-          try {
-            const geocodeResponse = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-              { signal: AbortSignal.timeout(5000) },
-            );
-            const geocodeData = await geocodeResponse.json();
-            const fetchedCityName =
-              geocodeData.address?.city ||
-              geocodeData.address?.town ||
-              geocodeData.address?.county;
-
-            if (fetchedCityName) {
-              cityName = fetchedCityName;
-            }
-          } catch (err) {
-            console.error("Error fetching city name:", err);
-            // Keep the default city name as fallback
-          }
-
-          // Then fetch weather
-          const weatherData = await getWeatherData(lat, lng);
-          if (isMounted) {
-            setWeather(weatherData);
-            setCityName(cityName);
-            setError(null);
-          }
-        } catch (err) {
-          console.error("Error fetching weather:", err);
-          if (isMounted) {
-            setError("Failed to load weather data");
-          }
-        }
-      };
-
-      // Only proceed if we have a valid location
-      if (userLat !== null && userLng !== null) {
-        await loadWeatherForLocation(userLat, userLng, "Your Location");
-      } else {
-        // No location available (permission denied), show default location (New Delhi)
-        await loadWeatherForLocation(28.6139, 77.209, "New Delhi");
-      }
+      // No valid cache, try to get real location (don't show permission prompt on initial load)
+      const position = await getCurrentLocation();
 
       if (isMounted) {
+        if (position) {
+          // User granted permission or had it already
+          await loadWeatherForLocation(
+            position.lat,
+            position.lng,
+            "Your Location",
+            true,
+          );
+        } else {
+          // Permission denied or timeout - use New Delhi as default
+          await loadWeatherForLocation(
+            NEW_DELHI_LAT,
+            NEW_DELHI_LNG,
+            "New Delhi",
+            false,
+          );
+          setLocationDenied(true);
+        }
         setLoading(false);
       }
     };
 
-    getInitialLocation();
+    initializeWeather();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
+  // Handle location selection from search
   const handleLocationSelect = async (selectedLocation: LocationData) => {
     try {
       setLoading(true);
@@ -177,6 +208,18 @@ export default function Index() {
         selectedLocation.longitude,
       );
       setWeather(weatherData);
+
+      // Cache this selected location
+      const cache: LocationCache = {
+        lat: selectedLocation.latitude,
+        lng: selectedLocation.longitude,
+        timestamp: Date.now(),
+        cityName: `${selectedLocation.name}${
+          selectedLocation.admin1 ? ", " + selectedLocation.admin1 : ""
+        }`,
+        isRealLocation: false,
+      };
+      localStorage.setItem("weatherLocationCache", JSON.stringify(cache));
     } catch (err) {
       console.error("Error fetching weather data:", err);
       setError("Failed to load weather for selected location");
@@ -185,91 +228,64 @@ export default function Index() {
     }
   };
 
+  // Handle "Current" button click - always try fresh geolocation
   const handleUseCurrentLocation = async () => {
     setLoading(true);
     setError(null);
 
     if (!navigator.geolocation) {
-      setError("Geolocation is not supported");
+      setError("Geolocation is not supported in your browser");
       setLoading(false);
       return;
     }
 
-    // When user clicks "Current", always try fresh geolocation
-    // This handles both first-time permission requests and re-requesting
-    // after the user changes browser settings (e.g., enables location)
     try {
-      const position = await new Promise<GeolocationPosition>(
-        (resolve, reject) => {
-          const timeoutId = setTimeout(
-            () => reject(new Error("Location request timed out")),
-            30000,
-          );
+      const position = await getCurrentLocation();
 
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              clearTimeout(timeoutId);
-              resolve(pos);
-            },
-            (err) => {
-              clearTimeout(timeoutId);
-              reject(err);
-            },
-            { timeout: 30000, enableHighAccuracy: false },
-          );
-        },
-      );
-
-      const { latitude, longitude } = position.coords;
-
-      // Fetch city name
-      let cityName = "Your Location";
-      try {
-        const geocodeResponse = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-          { signal: AbortSignal.timeout(5000) },
+      if (position) {
+        // Successfully got location
+        await loadWeatherForLocation(
+          position.lat,
+          position.lng,
+          "Your Location",
+          true,
         );
-        const geocodeData = await geocodeResponse.json();
-        const fetchedCityName =
-          geocodeData.address?.city ||
-          geocodeData.address?.town ||
-          geocodeData.address?.county;
-
-        if (fetchedCityName) {
-          cityName = fetchedCityName;
+      } else {
+        // Failed to get location - either permission denied or timeout
+        // Check if we had previously denied permission
+        const cached = localStorage.getItem("weatherLocationCache");
+        if (cached) {
+          try {
+            const cache: LocationCache = JSON.parse(cached);
+            if (!cache.isRealLocation) {
+              // Previous state was denied, show message
+              setError(
+                "Location permission denied. Please enable location in your browser settings and try again.",
+              );
+              setLocationDenied(true);
+              setLoading(false);
+              return;
+            }
+          } catch (err) {
+            // Ignore parse errors
+          }
         }
-      } catch (err) {
-        console.error("Error fetching city name:", err);
+
+        // Either never had permission or fresh denial
+        setError(
+          "Unable to get your location. Please enable location permission in your browser settings.",
+        );
+        await loadWeatherForLocation(
+          NEW_DELHI_LAT,
+          NEW_DELHI_LNG,
+          "New Delhi",
+          false,
+        );
+        setLocationDenied(true);
       }
-
-      // Fetch weather
-      const weatherData = await getWeatherData(latitude, longitude);
-      setWeather(weatherData);
-      setCityName(cityName);
-      setError(null);
-
-      // Cache the successful location
-      localStorage.setItem(
-        "userLocation",
-        JSON.stringify({
-          lat: latitude,
-          lng: longitude,
-          timestamp: Date.now(),
-        }),
-      );
     } catch (err) {
-      console.error("Error getting location:", err);
-
-      // If user denied permission or any other error, fall back to New Delhi
-      try {
-        const weatherData = await getWeatherData(28.6139, 77.209); // New Delhi coordinates
-        setWeather(weatherData);
-        setCityName("New Delhi");
-        setError(null);
-      } catch (weatherErr) {
-        console.error("Error fetching New Delhi weather:", weatherErr);
-        setError("Failed to load weather data");
-      }
+      console.error("Error in handleUseCurrentLocation:", err);
+      setError("An error occurred while fetching your location");
     } finally {
       setLoading(false);
     }
@@ -326,6 +342,19 @@ export default function Index() {
         {error && (
           <div className="bg-destructive/10 border border-destructive text-destructive rounded-lg p-4 mb-6">
             {error}
+          </div>
+        )}
+
+        {/* Location Denied Warning */}
+        {locationDenied && !error && (
+          <div className="bg-yellow-500/10 border border-yellow-500 text-yellow-700 dark:text-yellow-500 rounded-lg p-4 mb-6">
+            <p className="font-medium">
+              Location permission is disabled. Showing New Delhi as default.
+            </p>
+            <p className="text-sm mt-1">
+              To see your own location, enable location permission in your
+              browser settings and click the "Current" button.
+            </p>
           </div>
         )}
 
