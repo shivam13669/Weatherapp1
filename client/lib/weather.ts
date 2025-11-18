@@ -117,6 +117,16 @@ export function getWeatherDescription(
   return codes[code] || { description: "Unknown", icon: "🌍" };
 }
 
+export function isDaytime(
+  checkTime: Date,
+  sunrise: string,
+  sunset: string,
+): boolean {
+  const sunriseDate = new Date(sunrise);
+  const sunsetDate = new Date(sunset);
+  return checkTime >= sunriseDate && checkTime < sunsetDate;
+}
+
 export async function searchLocations(query: string): Promise<LocationData[]> {
   if (!query || query.length < 2) return [];
 
