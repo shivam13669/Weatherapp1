@@ -61,18 +61,19 @@ export function HourlyForecast({ data }: HourlyForecastProps) {
                 hour: "2-digit",
                 minute: "2-digit",
               });
+              const tempF = (hour.temp * 9) / 5 + 32;
 
               return (
                 <div
                   key={idx}
-                  className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 flex-shrink-0 min-w-[100px]"
+                  className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 flex-shrink-0 min-w-[110px]"
                 >
                   <p className="text-xs font-semibold text-muted-foreground">
                     {timeStr}
                   </p>
                   <p className="text-2xl">{weather.icon}</p>
-                  <p className="text-lg font-bold text-foreground">
-                    {hour.temp.toFixed(0)}°
+                  <p className="text-sm font-bold text-foreground">
+                    {hour.temp.toFixed(0)}° / {tempF.toFixed(0)}°
                   </p>
                   {hour.precipitation > 0 && (
                     <p className="text-xs text-secondary">
