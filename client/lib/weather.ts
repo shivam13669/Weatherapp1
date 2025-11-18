@@ -12,6 +12,8 @@ export interface WeatherData {
     uvIndex: number;
     precipitation: number;
     aqi: number;
+    sunrise: string;
+    sunset: string;
   };
   hourly: {
     time: string[];
@@ -27,6 +29,8 @@ export interface WeatherData {
     temperature2mMin: number[];
     precipitation: number[];
     windSpeed10mMax: number[];
+    sunrise: string[];
+    sunset: string[];
   };
   timezone: string;
   latitude: number;
@@ -113,6 +117,16 @@ export function getWeatherDescription(
   return codes[code] || { description: "Unknown", icon: "🌍" };
 }
 
+export function isDaytime(
+  checkTime: Date,
+  sunrise: string,
+  sunset: string,
+): boolean {
+  const sunriseDate = new Date(sunrise);
+  const sunsetDate = new Date(sunset);
+  return checkTime >= sunriseDate && checkTime < sunsetDate;
+}
+
 export async function searchLocations(query: string): Promise<LocationData[]> {
   if (!query || query.length < 2) return [];
 
@@ -120,10 +134,23 @@ export async function searchLocations(query: string): Promise<LocationData[]> {
     const response = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
         query,
-      )}&count=10&language=en&format=json`,
+      )}&count=50&language=en&format=json`,
     );
     const data = await response.json();
-    return data.results || [];
+    if (!data.results) return [];
+
+    // Sort results by relevance: exact matches first, then by population
+    const results = data.results.sort((a: LocationData, b: LocationData) => {
+      const aExact = a.name.toLowerCase() === query.toLowerCase() ? 0 : 1;
+      const bExact = b.name.toLowerCase() === query.toLowerCase() ? 0 : 1;
+
+      if (aExact !== bExact) return aExact - bExact;
+
+      // Then sort by population (higher population first)
+      return (b.population || 0) - (a.population || 0);
+    });
+
+    return results.slice(0, 50);
   } catch (error) {
     console.error("Error searching locations:", error);
     return [];
@@ -137,7 +164,7 @@ export async function getWeatherData(
   try {
     const [weatherResponse, aqiResponse] = await Promise.all([
       fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,pressure_msl,visibility,uv_index,precipitation&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=10`,
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,pressure_msl,visibility,uv_index,precipitation&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset&timezone=auto&forecast_days=10`,
       ),
       fetch(
         `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi`,
@@ -147,13 +174,20 @@ export async function getWeatherData(
     const weatherData = await weatherResponse.json();
     const aqiData = await aqiResponse.json();
 
+    // Convert is_day (0 or 1) to boolean
+    const isDay = weatherData.current.is_day === 1;
+
+    // Get sunrise and sunset from daily data (first day)
+    const sunrise = weatherData.daily.sunrise[0] || "";
+    const sunset = weatherData.daily.sunset[0] || "";
+
     return {
       current: {
         temperature: weatherData.current.temperature_2m,
         windSpeed: weatherData.current.wind_speed_10m,
         windDirection: weatherData.current.wind_direction_10m,
         weatherCode: weatherData.current.weather_code,
-        isDay: weatherData.current.is_day,
+        isDay: isDay,
         relativeHumidity: weatherData.current.relative_humidity_2m,
         apparentTemperature: weatherData.current.apparent_temperature,
         pressureMsl: weatherData.current.pressure_msl,
@@ -161,6 +195,8 @@ export async function getWeatherData(
         uvIndex: weatherData.current.uv_index,
         precipitation: weatherData.current.precipitation,
         aqi: aqiData.current.us_aqi || 0,
+        sunrise: sunrise,
+        sunset: sunset,
       },
       hourly: {
         time: weatherData.hourly.time,
@@ -176,6 +212,8 @@ export async function getWeatherData(
         temperature2mMin: weatherData.daily.temperature_2m_min,
         precipitation: weatherData.daily.precipitation_sum,
         windSpeed10mMax: weatherData.daily.wind_speed_10m_max,
+        sunrise: weatherData.daily.sunrise,
+        sunset: weatherData.daily.sunset,
       },
       timezone: weatherData.timezone,
       latitude: weatherData.latitude,
