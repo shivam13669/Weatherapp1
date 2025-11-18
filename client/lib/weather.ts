@@ -12,6 +12,8 @@ export interface WeatherData {
     uvIndex: number;
     precipitation: number;
     aqi: number;
+    sunrise: string;
+    sunset: string;
   };
   hourly: {
     time: string[];
