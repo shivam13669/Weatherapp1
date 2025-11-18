@@ -122,10 +122,25 @@ export async function searchLocations(query: string): Promise<LocationData[]> {
     const response = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
         query,
-      )}&count=10&language=en&format=json`,
+      )}&count=50&language=en&format=json`,
     );
     const data = await response.json();
-    return data.results || [];
+    if (!data.results) return [];
+
+    // Sort results by relevance: exact matches first, then by population
+    const results = data.results.sort((a: LocationData, b: LocationData) => {
+      const aExact =
+        a.name.toLowerCase() === query.toLowerCase() ? 0 : 1;
+      const bExact =
+        b.name.toLowerCase() === query.toLowerCase() ? 0 : 1;
+
+      if (aExact !== bExact) return aExact - bExact;
+
+      // Then sort by population (higher population first)
+      return (b.population || 0) - (a.population || 0);
+    });
+
+    return results.slice(0, 50);
   } catch (error) {
     console.error("Error searching locations:", error);
     return [];
