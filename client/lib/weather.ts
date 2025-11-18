@@ -29,6 +29,8 @@ export interface WeatherData {
     temperature2mMin: number[];
     precipitation: number[];
     windSpeed10mMax: number[];
+    sunrise: string[];
+    sunset: string[];
   };
   timezone: string;
   latitude: number;
