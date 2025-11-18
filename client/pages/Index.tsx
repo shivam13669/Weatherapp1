@@ -325,6 +325,21 @@ export default function Index() {
                 <MapPin className="h-4 w-4" />
                 <span className="hidden sm:inline">Current</span>
               </Button>
+              {mounted && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleTheme}
+                  className="gap-2"
+                  title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+                >
+                  {theme === "light" ? (
+                    <Moon className="h-4 w-4" />
+                  ) : (
+                    <Sun className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </div>
