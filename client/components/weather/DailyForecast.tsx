@@ -62,7 +62,15 @@ export function DailyForecast({ data }: DailyForecastProps) {
         // Week overview - more compact
         <div className="space-y-2">
           {nextDays.map((day, idx) => {
-            const weather = getWeatherDescription(day.weatherCode);
+            // Use noon as reference for determining day/night
+            const noonTime = new Date(day.date);
+            noonTime.setHours(12, 0, 0, 0);
+            const isDay = isDaytime(
+              noonTime,
+              data.daily.sunrise[idx],
+              data.daily.sunset[idx],
+            );
+            const weather = getWeatherDescription(day.weatherCode, isDay);
             const dateStr = day.date.toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
