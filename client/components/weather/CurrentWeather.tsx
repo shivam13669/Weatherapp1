@@ -156,27 +156,17 @@ export function CurrentWeather({ data, cityName }: CurrentWeatherProps) {
       <div className="bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20 rounded-2xl p-8 mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex-1">
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <h1 className="text-4xl font-bold text-foreground">{cityName}</h1>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setTempUnit(tempUnit === "C" ? "F" : "C")}
-                className="whitespace-nowrap"
-              >
-                °{tempUnit === "C" ? "F" : "C"}
-              </Button>
-            </div>
+            <h1 className="text-4xl font-bold text-foreground mb-4">{cityName}</h1>
 
             <p className="text-2xl font-semibold text-primary mb-1">
-              {displayTemp.toFixed(0)}{tempSymbol}
+              {tempC.toFixed(0)}°C / {tempF.toFixed(0)}°F
             </p>
             <p className="text-lg text-muted-foreground mb-4">
               {weather.description}
             </p>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Feels like {displayFeelsLike.toFixed(0)}{tempSymbol}
+                Feels like {feelsLikeC.toFixed(0)}°C / {feelsLikeF.toFixed(0)}°F
               </p>
               <p className="text-sm text-muted-foreground">
                 AQI: {data.current.aqi.toFixed(0)} ({aqiLabel})
