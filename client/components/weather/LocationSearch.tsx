@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { searchLocations, LocationData } from "@/lib/weather";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { Loader2, Heart } from "lucide-react";
+import { useFavorites } from "./FavoriteLocations";
 
 interface LocationSearchProps {
   onSelectLocation: (location: LocationData) => void;
