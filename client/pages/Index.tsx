@@ -145,8 +145,8 @@ export default function Index() {
       if (userLat !== null && userLng !== null) {
         await loadWeatherForLocation(userLat, userLng, "Your Location");
       } else {
-        // No location available (permission denied), show default location (Delhi)
-        await loadWeatherForLocation(28.6139, 77.209, "Delhi");
+        // No location available (permission denied), show default location (New Delhi)
+        await loadWeatherForLocation(28.6139, 77.209, "New Delhi");
       }
 
       if (isMounted) {
@@ -260,14 +260,14 @@ export default function Index() {
     } catch (err) {
       console.error("Error getting location:", err);
 
-      // If user denied permission or any other error, fall back to Delhi
+      // If user denied permission or any other error, fall back to New Delhi
       try {
-        const weatherData = await getWeatherData(28.6139, 77.209); // Delhi coordinates
+        const weatherData = await getWeatherData(28.6139, 77.209); // New Delhi coordinates
         setWeather(weatherData);
-        setCityName("Delhi");
+        setCityName("New Delhi");
         setError(null);
       } catch (weatherErr) {
-        console.error("Error fetching Delhi weather:", weatherErr);
+        console.error("Error fetching New Delhi weather:", weatherErr);
         setError("Failed to load weather data");
       }
     } finally {
